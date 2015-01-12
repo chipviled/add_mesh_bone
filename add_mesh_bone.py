@@ -1,6 +1,6 @@
 # Bla-Bla-Bla.
 # GPL.
-# Begioning on Rigify code.
+# Begining on Rigify code.
 # Created by Chip Viled.
 #
 #====================== BEGIN GPL LICENSE BLOCK ======================
@@ -24,7 +24,7 @@
 bl_info = {
     "name": "Add Mesh Bone",
     "author": "Chip Viled",
-    "version": (0, 2),
+    "version": (0, 3),
     "blender": (2, 70, 0),
     "location": "W (in pose mode)",
     "description": "Add Mesh Bone",
@@ -34,12 +34,12 @@ bl_info = {
 }
 
 
-
 import bpy
 
 
-WGT_PREFIX = "WGT-"  # Prefix for widget objects.
-WGT_LAYERS = [x == 19 for x in range(0, 20)]
+WGT_PREFIX = "WGT-"
+WGT_LAYER = 19
+WGT_LAYERS = [x == WGT_LAYER  for x in range(0, 20)]
 
 
 class MError(Exception):
@@ -135,7 +135,6 @@ def create_circle_widget(rig, bone_name, radius=1.0, head_tail=0.0, with_line=Fa
 
 
 
-
 class AddMeshBone(bpy.types.Operator):
     """Add Mesh Bone"""
     bl_idname = "object.add_mesh_bone_operator"
@@ -149,10 +148,47 @@ class AddMeshBone(bpy.types.Operator):
         bdb = bpy.context.scene.objects.active
         bb = bpy.context.active_pose_bone.name
 
+        bpy.ops.object.mode_set(mode='OBJECT')
+        ls_temp = bpy.context.scene.layers[WGT_LAYER]
+        bpy.context.scene.layers[WGT_LAYER] = True
+
         create_circle_widget(bdb, bb, 0.3, 0.5)
+
+        bpy.context.scene.layers[WGT_LAYER] = ls_temp
+        bpy.ops.object.mode_set(mode='POSE')
 
         bpy.context.active_pose_bone.custom_shape = bpy.data.objects[WGT_PREFIX + bb]
         bpy.context.active_bone.show_wire = True
+
+        return {'FINISHED'}
+
+
+class DelMeshBone(bpy.types.Operator):
+    """Del Mesh Bone"""
+    bl_idname = "object.del_mesh_bone_operator"
+    bl_label = "Del Mesh Bone"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        if bpy.context.mode != 'POSE':
+            raise MError("Does not work outside POSE mode. You must select some bone.")
+
+        bdb = bpy.context.scene.objects.active
+        bb = bpy.context.active_pose_bone.name
+
+        bpy.context.active_pose_bone.custom_shape = None
+        bpy.context.active_bone.show_wire = False
+
+        bpy.ops.object.mode_set(mode='OBJECT')
+        ls_temp = bpy.context.scene.layers[WGT_LAYER]
+        bpy.context.scene.layers[WGT_LAYER] = True
+
+        for ob in bpy.context.scene.objects:
+            ob.select = ob.type == 'MESH' and ob.name.startswith(WGT_PREFIX + bb)
+        bpy.ops.object.delete()
+
+        bpy.context.scene.layers[WGT_LAYER] = ls_temp
+        bpy.ops.object.mode_set(mode='POSE')
 
         return {'FINISHED'}
 
@@ -162,14 +198,20 @@ def add_object_button(self, context):
         AddMeshBone.bl_idname,
         text=AddMeshBone.__doc__,
         icon='PLUGIN')
+    self.layout.operator(
+        DelMeshBone.bl_idname,
+        text=DelMeshBone.__doc__,
+        icon='PLUGIN')
 
 
 def register():
     bpy.utils.register_class(AddMeshBone)
+    bpy.utils.register_class(DelMeshBone)
     bpy.types.VIEW3D_MT_pose_specials.append(add_object_button)
 
 def unregister():
     bpy.utils.unregister_class(AddMeshBone)
+    bpy.utils.unregister_class(DelMeshBone)
     bpy.types.VIEW3D_MT_pose_specials.remove(add_object_button)
 
 if __name__ == "__main__":
